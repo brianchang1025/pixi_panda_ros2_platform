@@ -2,3 +2,8 @@
 	path = src/libfranka
 	url = https://github.com/frankarobotics/libfranka.git
 	branch = 0.9.2
+
+[submodule "src/crisp_controllers"]
+	path = src/crisp_controllers
+	url = https://github.com/utiasdsl/crisp_controllers.git
+	branch = main

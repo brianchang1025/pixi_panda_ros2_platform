@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+export THIRD_PERSON_CAMERA_SN="_827112070588"
+export WRIST_CAMERA_SN="_827112070502"

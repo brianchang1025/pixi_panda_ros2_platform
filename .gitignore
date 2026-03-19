@@ -6,3 +6,6 @@
 build/
 install/
 log/
+
+# Crisp Controllers build artifacts
+src/realsense-ros

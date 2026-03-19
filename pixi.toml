@@ -1,12 +1,12 @@
 [workspace]
-authors = ["Lev Kozlov <kozlov.l.a10@gmail.com>"]
-name = "pixi_panda_ros2"
+authors = ["Chang Shao Hsuan <brianchang4591@gmail.com>"]
+name = "pixi_panda_ros2_ITR"
 version = "0.1.0"
-channels = ["https://fast.prefix.dev/conda-forge"]
+channels = ["conda-forge"]
 platforms = ["linux-64"]
 
 [activation]
-scripts = ["scripts/set_ros_env.sh", "install/setup.bash"]
+scripts = ["scripts/set_ros_env.sh", "scripts/set_hardware_env.sh", "install/setup.bash"]
 
 [dependencies]
 python = "*"
@@ -17,6 +17,7 @@ make = "*"
 ninja = "*"
 requests = ">=2.32.4,<3"
 websockets = ">=15.0.1,<16"
+numpy = "<=2.3"
 opencv = "*"
 pandas = ">=2.3.0,<3"
 pyarrow = ">=20.0.0,<21"
@@ -27,6 +28,7 @@ libgl-devel = "*"
 
 [environments]
 jazzy = { features = ["jazzy", "dev"] }
+jazzy-realsense = { features = ["jazzy", "dev", "realsense-src"] }
 
 # ROS2 Jazzy Feature
 [feature.jazzy]
@@ -47,13 +49,26 @@ ros-jazzy-generate-parameter-library = "*"
 rosdep = "*"
 ros-jazzy-topic-tools = ">=1.3.3,<2"
 ros-jazzy-topic-tools-interfaces = ">=1.3.3,<2"
+ros-jazzy-image-transport-plugins = "*"
+# NOTE:
+# Do not add `ros-jazzy-realsense2-camera` binary package here on this host.
+# Current available builds require newer glibc than this system provides.
+# Use the `jazzy-realsense` environment with source build workflow below.
 
 [feature.jazzy.tasks]
 update-submodules = "git submodule update --init --recursive"
-clone-crisp = "test -d src/crisp_controllers || git clone https://github.com/utiasDSL/crisp_controllers.git src/crisp_controllers"
 build = "colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -Wno-dev --symlink-install"
-setup = { depends-on = ["update-submodules", "clone-crisp",  "build"] }
+setup = { depends-on = ["update-submodules",  "build"] }
 franka = "ros2 launch franka_bringup franka.launch.py"
+franka_platform = "ros2 launch franka_bringup franka_platform.launch.py"
+
+[feature.realsense-src.tasks]
+fetch-realsense-ros = "test -d src/realsense-ros || git clone https://github.com/IntelRealSense/realsense-ros.git src/realsense-ros"
+pin-realsense-ros = "git -C src/realsense-ros fetch --tags && git -C src/realsense-ros reset --hard HEAD && git -C src/realsense-ros clean -fd && git -C src/realsense-ros checkout 4.56.4"
+setup-realsense = { depends-on = ["fetch-realsense-ros", "pin-realsense-ros", "setup"] }
+
+[feature.realsense-src.dependencies]
+librealsense = "*"
 
 # Development tools
 [feature.dev.pypi-dependencies]
