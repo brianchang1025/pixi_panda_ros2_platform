@@ -59,8 +59,9 @@ ros-jazzy-image-transport-plugins = "*"
 update-submodules = "git submodule update --init --recursive"
 build = "colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -Wno-dev --symlink-install"
 setup = { depends-on = ["update-submodules",  "build"] }
-franka = "ros2 launch franka_bringup franka.launch.py"
+franka = "ros2 launch franka_bringup franka_new.launch.py"
 franka_platform = "ros2 launch franka_bringup franka_platform.launch.py"
+franka_button = "ros2 launch franka_buttons button_to_record_msg.launch.py"
 
 [feature.realsense-src.tasks]
 fetch-realsense-ros = "test -d src/realsense-ros || git clone https://github.com/IntelRealSense/realsense-ros.git src/realsense-ros"
@@ -78,3 +79,4 @@ crisp-python = { git = "https://github.com/brianchang1025/crisp_py_panda"}
 
 [pypi-dependencies]
 filelock = ">=3.20.3, <4"
+python-dotenv = ">=1,<2"

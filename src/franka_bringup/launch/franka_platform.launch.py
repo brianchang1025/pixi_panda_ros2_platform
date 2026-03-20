@@ -291,6 +291,28 @@ def generate_robot_nodes(context):
                 output="screen",
                 condition=IfCondition(LaunchConfiguration("load_gripper")),
         ),
+        # Franka Button node for reading robot button states.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                [
+                    PathJoinSubstitution(
+                        [
+                            FindPackageShare("franka_buttons"),
+                            "launch",
+                            "button_to_record_msg.launch.py",
+                        ]
+                    )
+                ]
+            ),
+            launch_arguments={
+                # Pass through namespace to keep topic layout consistent.
+                "namespace": namespace,
+                # Pass through robot IP for button hardware connection.
+                "robot_ip": LaunchConfiguration("robot_ip").perform(context),
+            }.items(),
+            condition=IfCondition(LaunchConfiguration("buttons_enabled")),
+        ),
+        
         # Optional RViz visualization with Franka default display config.
         Node(
             package="rviz2",
@@ -388,6 +410,11 @@ def generate_launch_description():
             "load_gripper",
             default_value="true",
             description="Use Franka Gripper as an end-effector",
+        ),
+        DeclareLaunchArgument(
+            "buttons_enabled",
+            default_value="true",
+            description="Enable Franka Button support for recording and control gripper",
         ),
         DeclareLaunchArgument(
             "use_rviz",
