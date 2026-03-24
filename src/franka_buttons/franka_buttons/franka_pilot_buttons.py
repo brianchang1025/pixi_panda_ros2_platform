@@ -247,30 +247,49 @@ class FrankaPilotButtonsNode(Node):
         )
 
         # If the credentials filepath exists, load the credentials from that file into memory
-        if pathlib.Path(credentials_filepath).exists():
+        if credentials_filepath and pathlib.Path(credentials_filepath).exists():
             self.get_logger().info(f"Logging in to Franka Desk using credentials in '{credentials_filepath}'.")
             if not load_dotenv(credentials_filepath):
                 msg = f"Could not load credentials from {credentials_filepath}"
                 self.get_logger().error(msg)
                 raise ValueError(msg)
-        else:
+        elif credentials_filepath:
             # If the credentials filepath does not exist, try to load credentials form the environment variables instead
             self.get_logger().warning(
                 f"Cannot load credentials path '{credentials_filepath}'."
                 "The Franka Desk credentials will be loaded from environment variables instead.",
             )
+        else:
+            self.get_logger().info(
+                "No credentials file configured. Franka Desk credentials will be loaded from environment variables.",
+            )
+
+        namespace_key = self.get_namespace().strip("/").split("/")[-1].upper()
+        username_keys = [f"FRANKA_DESK_USERNAME_{namespace_key}", "FRANKA_DESK_USERNAME"]
+        password_keys = [f"FRANKA_DESK_PASSWORD_{namespace_key}", "FRANKA_DESK_PASSWORD"]
+
+        username = next((os.environ.get(key) for key in username_keys if os.environ.get(key)), None)
+        password = next((os.environ.get(key) for key in password_keys if os.environ.get(key)), None)
 
         # The credentials should now be in the environment variables, check if that is indeed the case
-        if not os.environ.get("FRANKA_DESK_USERNAME") or not os.environ.get("FRANKA_DESK_PASSWORD") :
-            msg = "Could not load both environment variables 'FRANKA_DESK_USERNAME' and 'FRANKA_DESK_PASSWORD'"
+        if not username or not password:
+            msg = (
+                "Could not resolve Franka Desk credentials from environment variables. "
+                f"Tried username vars {username_keys} and password vars {password_keys}."
+            )
             self.get_logger().error(msg)
             raise ValueError(msg)
 
         # Connect to the desk and log in
-        self.get_logger().error("Logging in to Franka Desk...")
+        selected_username_key = next((key for key in username_keys if os.environ.get(key)), username_keys[-1])
+        selected_password_key = next((key for key in password_keys if os.environ.get(key)), password_keys[-1])
+        self.get_logger().info(
+            "Logging in to Franka Desk using environment credentials "
+            f"({selected_username_key}, {selected_password_key})...",
+        )
         self.desk.login(
-            username=os.environ["FRANKA_DESK_USERNAME"],
-            password=os.environ["FRANKA_DESK_PASSWORD"],
+            username=username,
+            password=password,
             timeout=self.get_parameter(self.request_timeout_param.name).get_parameter_value().double_value,
         )
         self.get_logger().info("Franka Desk login succesful.")

@@ -205,9 +205,8 @@ def generate_robot_nodes(context):
                 [
                     PathJoinSubstitution(
                         [
-                            FindPackageShare("robot_launch"),
+                            FindPackageShare("franka_gripper"),
                             "launch",
-                            "gripper",
                             "gripper.launch.py",
                         ]
                     )
@@ -246,21 +245,6 @@ def generate_robot_nodes(context):
                 ),
             ],
             condition=IfCondition(LaunchConfiguration("use_rviz")),
-        ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                [
-                    PathJoinSubstitution(
-                        [
-                            FindPackageShare("robot_launch"),
-                            "launch",
-                            "camera",
-                            "dual_realsense.launch.py",
-                        ]
-                    )
-                ]
-            ),
-            condition=IfCondition(LaunchConfiguration("load_camera")),
         ),
     ]
 
@@ -301,11 +285,6 @@ def generate_launch_description():
             "use_rviz",
             default_value="false",
             description="Visualize the robot in RViz",
-        ),
-        DeclareLaunchArgument(
-            "load_camera",
-            default_value="true",
-            description="Launch dual realsense cameras",
         ),
         DeclareLaunchArgument(
             "use_fake_hardware", default_value="false", description="Use fake hardware"

@@ -1,80 +1,137 @@
-# utils.py
+#!/usr/bin/env python3
+
+import logging
 import os
-import shutil
-import subprocess
+import select
 import sys
-from typing import Optional
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, TYPE_CHECKING
 
-# Configuration Constants
-TMUX_SESSION = "panda_connect"
-COLORS = {
-    "R": "\033[91m",
-    "G": "\033[92m", 
-    "B": "\033[94m", 
-    "RE": "\033[0m"
-}
+if TYPE_CHECKING:
+    from utils.franka_desk import FrankaLockUnlock
 
-def which(name: str) -> Optional[str]:
-    """Check if a command is available on the system."""
-    return shutil.which(name)
+try:
+    from rich import print as rich_print  # type: ignore[import-not-found]
+    from rich.panel import Panel  # type: ignore[import-not-found]
+    from rich.text import Text  # type: ignore[import-not-found]
+except ImportError:
+    rich_print = None
+    Panel = None
+    Text = None
 
-def make_payload(cmd: str, log: str) -> str:
-    """Creates a shell script payload that keeps the terminal open on exit."""
-    return (
-        f"{cmd} 2>&1 | tee -a '{log}'; echo; echo '[process exited]';"
-        "echo 'Press q to close this window...'; "
-        "while true; do read -n1 -s key; [[ \"$key\" == q ]] && break; done"
+LOGGER = logging.getLogger(__name__)
+WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
+
+
+@dataclass(frozen=True)
+class ArmConfig:
+    label: str
+    robot_ip: str
+    namespace: str
+    launch_camera: bool
+
+
+def wait_for_operator_ready() -> None:
+    LOGGER.warning("IMPORTANT SAFETY CHECK before launching robot terminals:")
+    LOGGER.warning("- USER STOP MUST be open.")
+    LOGGER.warning("- Robot status light MUST be blue.")
+    LOGGER.warning("Press Enter only after both conditions are confirmed.")
+    input()
+
+
+def get_desk_credentials(arm_label: str) -> tuple[str, str]:
+    arm_key = arm_label.upper()
+    username = os.getenv(f"FRANKA_DESK_USERNAME_{arm_key}") or os.getenv("FRANKA_DESK_USERNAME")
+    password = os.getenv(f"FRANKA_DESK_PASSWORD_{arm_key}") or os.getenv("FRANKA_DESK_PASSWORD")
+
+    if not username or not password:
+        raise RuntimeError(
+            "Missing Franka Desk credentials. Set per-arm env vars "
+            f"FRANKA_DESK_USERNAME_{arm_key}/FRANKA_DESK_PASSWORD_{arm_key} "
+            "or global FRANKA_DESK_USERNAME/FRANKA_DESK_PASSWORD."
+        )
+    return username, password
+
+
+def enable_arm_with_desk(
+    arm: "ArmConfig",
+    username: str,
+    password: str,
+    protocol: str,
+) -> "FrankaLockUnlock":
+    from utils.franka_desk import FrankaLockUnlock
+
+    LOGGER.info(
+        f"Connecting to Franka Desk at {protocol}://{arm.robot_ip}")
+    client = FrankaLockUnlock(
+        hostname=arm.robot_ip,
+        username=username,
+        password=password,
+        protocol=protocol,
+        relock=True,
     )
+    client.enable_robot()
+    return client
 
-def launch_in_terminal(title: str, cmd: str, log: str) -> Optional[subprocess.Popen]:
-    """Spawns the given command in a new GUI terminal or tmux window."""
-    payload = make_payload(cmd, log)
-    
-    if which("gnome-terminal"):
-        args = ["gnome-terminal", "--title", title, "--", "bash", "-lc", payload]
-        return subprocess.Popen(args)
-    
-    if which("tmux"):
-        has_session = subprocess.run(["tmux", "has-session", "-t", TMUX_SESSION], 
-                                     capture_output=True).returncode == 0
-        if not has_session:
-            subprocess.run(["tmux", "new-session", "-d", "-s", TMUX_SESSION, "-n", title, "bash", "-lc", payload])
+
+def reboot_and_relaunch_side(
+    side: str,
+    arms: List["ArmConfig"],
+    clients: dict[str, "FrankaLockUnlock"],
+    pixi_env: str,
+    logger: logging.Logger,
+    mode: str = "dual",
+) -> None:
+    from utils.terminal_launcher import stop_single_process, start_single_launch
+
+    arm = next((candidate for candidate in arms if candidate.label == side), None)
+    if arm is None:
+        logger.warning(f"No {side} arm is configured; cannot reboot the {side} arm.")
+        return
+
+    client = clients.get(side)
+    if client is None:
+        logger.warning(f"{side.capitalize()} Franka Desk client is missing; cannot reboot the {side} arm.")
+        return
+
+    logger.info(f"Received '{side[0]}': rebooting the {side} arm via Franka Desk...")
+    client.reboot_sys()
+
+    logger.info(f"Stopping the {side} launch process...")
+    stop_single_process(arm, pixi_env)
+    time.sleep(1)
+
+    logger.info(f"Confirm safety before relaunching the {side} arm.")
+    wait_for_operator_ready()
+
+    logger.info(f"Reopening the {side} launch terminal...")
+    start_single_launch(arm, pixi_env, WORKSPACE_ROOT, logger, mode)
+
+
+def read_key() -> str:
+    select.select([sys.stdin], [], [])
+    return sys.stdin.read(1)
+
+
+def show_keyboard_controls_panel(mode: str = "dual") -> None:
+    if rich_print is not None and Panel is not None and Text is not None:
+        if mode == "single":
+            panel_text = (
+                "[q] Quit launcher\n"
+                "[s] Show runtime status\n"
+                "[h] Show this help\n"
+                "[l] Reboot and relaunch arm"
+            )
         else:
-            subprocess.run(["tmux", "new-window", "-t", TMUX_SESSION, "-n", title, "bash", "-lc", payload])
-        return None
-
-    return subprocess.Popen(["bash", "-lc", payload])
-
-def kill_all():
-    """Kills all Pixi, ROS 2, and UI sessions."""
-    print(f"\n{COLORS['R']}Shutting down all system processes...{COLORS['RE']}")
-    subprocess.run(["pkill", "-9", "-f", "pixi run -e jazzy"], stderr=subprocess.DEVNULL)
-    if which("tmux"):
-        subprocess.run(["tmux", "kill-session", "-t", TMUX_SESSION], stderr=subprocess.DEVNULL)
-
-def read_single_key() -> str:
-    """Reads one character from stdin without requiring Enter."""
-    import termios, tty
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
-    return ch
-
-def prompt_default(prompt_text: str, default: str) -> str:
-    """Input prompt that returns default if user presses Enter or just spaces."""
-    try:
-        # We add a hint (Enter to accept) so the user knows what to do
-        hint = f"{COLORS['B']}(Press Enter to accept default){COLORS['RE']}"
-        
-        # Display: IP Left Panda [192.168.31.10] (Enter to accept): 
-        user_input = input(f"{prompt_text} [{default}] {hint}: ").strip()
-        
-        # If user_input is empty, 'bool(user_input)' is False, so it returns 'default'
-        return user_input if user_input else default
-        
-    except EOFError:
-        return default
+            panel_text = (
+                "[q] Quit launcher\n"
+                "[s] Show runtime status\n"
+                "[h] Show this help\n"
+                "[l] Reboot and relaunch left arm\n"
+                "[r] Reboot and relaunch right arm"
+            )
+        content = Text(panel_text)
+        rich_print(Panel(content, title="Control Panel", border_style="blue"))
+        return

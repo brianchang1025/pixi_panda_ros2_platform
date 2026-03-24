@@ -7,8 +7,10 @@ from launch_ros.actions import Node
 def generate_launch_description():
     robot_ip = LaunchConfiguration("robot_ip", default="")
     namespace = LaunchConfiguration("namespace", default="")
+    credentials_filepath = LaunchConfiguration("credentials_filepath", default="")
     launch_arguments = [DeclareLaunchArgument("robot_ip", default_value=""),
-                        DeclareLaunchArgument("namespace", default_value="")]
+                        DeclareLaunchArgument("namespace", default_value=""),
+                        DeclareLaunchArgument("credentials_filepath", default_value="")]
 
     return launch.LaunchDescription(
         [
@@ -20,7 +22,7 @@ def generate_launch_description():
                 parameters=[
                     {
                         "hostname": robot_ip,
-                        "credentials_filepath": ".env",
+                        "credentials_filepath": credentials_filepath,
                         "request_timeout": 2.0,
                     },
                 ],

@@ -9,3 +9,5 @@ log/
 
 # Crisp Controllers build artifacts
 src/realsense-ros
+scripts/set_hardware_env.sh
+scripts/set_ros_env.sh
