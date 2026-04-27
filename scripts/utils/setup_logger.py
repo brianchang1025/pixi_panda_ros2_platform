@@ -70,7 +70,7 @@ def log_runtime_status(arms: List["ArmConfig"], pixi_env: str, logger: logging.L
     """
     arm_status = ", ".join(
         [
-            f"{arm.label}(ip={arm.robot_ip}, ns={arm.namespace}, camera={arm.launch_camera})"
+            f"{arm.label}(ip={arm.robot_ip}, ns={arm.namespace}, camera={arm.launch_camera}, gripper={arm.launch_gripper})"
             for arm in arms
         ]
     )

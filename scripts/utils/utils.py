@@ -31,6 +31,7 @@ class ArmConfig:
     robot_ip: str
     namespace: str
     launch_camera: bool
+    launch_gripper: bool
 
 
 def wait_for_operator_ready() -> None:

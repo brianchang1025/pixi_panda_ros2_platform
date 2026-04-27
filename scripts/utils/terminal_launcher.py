@@ -12,12 +12,17 @@ if TYPE_CHECKING:
     from launch_interface import ArmConfig
 
 
+_GNOME_TERMINAL_WINDOW_STARTED = False
+
+
 def launch_in_new_terminal(
     title: str,
     command: str,
     cwd: Path,
     logger: logging.Logger | None = None,
 ) -> None:
+    global _GNOME_TERMINAL_WINDOW_STARTED
+
     payload = (
         f"cd {shlex.quote(str(cwd))} && {command}; "
         "status=$?; "
@@ -28,7 +33,18 @@ def launch_in_new_terminal(
     )
 
     if shutil.which("gnome-terminal"):
-        subprocess.Popen(["gnome-terminal", "--title", title, "--", "bash", "-lc", payload])
+        gnome_args = [
+            "gnome-terminal",
+            "--window" if not _GNOME_TERMINAL_WINDOW_STARTED else "--tab",
+            "--title",
+            title,
+            "--",
+            "bash",
+            "-lc",
+            payload,
+        ]
+        subprocess.Popen(gnome_args)
+        _GNOME_TERMINAL_WINDOW_STARTED = True
         return
 
     if shutil.which("konsole"):
@@ -100,6 +116,29 @@ def build_launch_command(arm: "ArmConfig", pixi_env: str) -> List[str]:
         f"robot_ip:={arm.robot_ip}",
         namespace_arg,
         f"load_camera:={'true' if arm.launch_camera else 'false'}",
+        f"load_gripper:={'true' if arm.launch_gripper else 'false'}",
+    ]
+
+
+def build_third_person_camera_command(pixi_env: str) -> List[str]:
+    """Build ROS 2 launch command for third-person camera in its own terminal."""
+    return [
+        "pixi",
+        "run",
+        "-e",
+        pixi_env,
+        "third_person_realsense",
+    ]
+
+
+def build_wrist_camera_command(pixi_env: str) -> List[str]:
+    """Build ROS 2 launch command for wrist camera in its own terminal."""
+    return [
+        "pixi",
+        "run",
+        "-e",
+        pixi_env,
+        "wrist_realsense",
     ]
 
 
@@ -148,7 +187,39 @@ def start_launches(
     """
     for arm in arms:
         start_single_launch(arm, pixi_env, workspace_root, logger, mode)
-        time.sleep(1)
+        time.sleep(3)
+
+
+def start_third_person_camera_launch(
+    pixi_env: str,
+    workspace_root: Path,
+    logger: logging.Logger,
+) -> None:
+    """Start third-person camera launch in a new terminal."""
+    command = shlex.join(build_third_person_camera_command(pixi_env))
+    logger.info(f"Starting third-person camera in new terminal: {command}")
+    launch_in_new_terminal(
+        title="third_person_camera",
+        command=command,
+        cwd=workspace_root,
+        logger=logger,
+    )
+
+
+def start_wrist_camera_launch(
+    pixi_env: str,
+    workspace_root: Path,
+    logger: logging.Logger,
+) -> None:
+    """Start wrist camera launch in a new terminal."""
+    command = shlex.join(build_wrist_camera_command(pixi_env))
+    logger.info(f"Starting wrist camera in new terminal: {command}")
+    launch_in_new_terminal(
+        title="wrist_camera",
+        command=command,
+        cwd=workspace_root,
+        logger=logger,
+    )
 
 
 def stop_single_process(arm: "ArmConfig", pixi_env: str) -> None:
@@ -171,3 +242,15 @@ def stop_processes(arms: List["ArmConfig"], pixi_env: str) -> None:
     """
     for arm in arms:
         stop_single_process(arm, pixi_env)
+
+
+def stop_third_person_camera_process(pixi_env: str) -> None:
+    """Stop third-person camera launch process started from this toolchain."""
+    pattern = f"pixi run -e {pixi_env} third_person_realsense"
+    stop_process_by_pattern(pattern)
+
+
+def stop_wrist_camera_process(pixi_env: str) -> None:
+    """Stop wrist camera launch process started from this toolchain."""
+    pattern = f"pixi run -e {pixi_env} wrist_realsense"
+    stop_process_by_pattern(pattern)

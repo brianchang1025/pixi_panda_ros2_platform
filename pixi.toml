@@ -62,6 +62,9 @@ setup = { depends-on = ["update-submodules",  "build"] }
 franka = "ros2 launch franka_bringup franka.launch.py"
 franka_platform = "ros2 launch franka_bringup franka_platform.launch.py"
 franka_button = "ros2 launch franka_buttons button_to_record_msg.launch.py"
+realsense = "ros2 launch launch/dual_realsense.launch.py"
+wrist_realsense = "ros2 launch launch/wrist_realsense.launch.py"
+third_person_realsense = "ros2 launch launch/third_person_realsense.launch.py"
 
 [feature.realsense-src.tasks]
 fetch-realsense-ros = "test -d src/realsense-ros || git clone https://github.com/IntelRealSense/realsense-ros.git src/realsense-ros"

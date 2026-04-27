@@ -21,7 +21,6 @@ except ImportError:
 
 from utils.franka_desk import FrankaLockUnlock
 from utils import prompt as prompt_utils
-from utils.prompt import prompt_bool
 from utils.setup_logger import setup_logging, log_arguments, log_runtime_status
 from utils.terminal_launcher import (
     launch_in_new_terminal,
@@ -29,8 +28,12 @@ from utils.terminal_launcher import (
     build_launch_command,
     start_single_launch,
     start_launches,
+    start_third_person_camera_launch,
+    start_wrist_camera_launch,
     stop_single_process,
     stop_processes,
+    stop_third_person_camera_process,
+    stop_wrist_camera_process,
 )
 from utils.utils import (
     ArmConfig,
@@ -48,6 +51,21 @@ DEFAULT_PROTOCOL = "https"
 LOGGER = logging.getLogger(__name__)
 
 
+def parse_bool_arg(value: str | bool) -> bool:
+    if isinstance(value, bool):
+        return value
+
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "f", "no", "n", "off"}:
+        return False
+
+    raise argparse.ArgumentTypeError(
+        "Expected a boolean value (true/false, yes/no, 1/0)."
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Prepare one or two Franka arms using Desk, then launch franka_platform.",
@@ -58,20 +76,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Robot mode: single arm or dual arm for teleoperation.",
     )
-    camera_group = parser.add_mutually_exclusive_group()
-    camera_group.add_argument(
+    parser.add_argument(
         "--camera",
-        dest="camera",
-        action="store_true",
+        type=parse_bool_arg,
+        nargs="?",
+        const=True,
         default=True,
-        help="Launch camera nodes in franka_platform.",
+        metavar="{true,false}",
+        help="Launch camera nodes in franka_platform (e.g. --camera false).",
     )
-    camera_group.add_argument(
-        "--no-camera",
-        dest="camera",
-        action="store_false",
-        default=None,
-        help="Disable camera launch explicitly.",
+    parser.add_argument(
+        "--gripper",
+        type=parse_bool_arg,
+        nargs="?",
+        const=True,
+        default=True,
+        metavar="{true,false}",
+        help="Load gripper in franka_platform (e.g. --gripper false).",
     )
     parser.add_argument(
         "--camera-arm",
@@ -129,9 +150,8 @@ def resolve_runtime_arguments(args: argparse.Namespace, logger: logging.Logger) 
         )
         logger.info(f"Using teleoperation mode: {args.mode}")
 
-    if args.camera is None:
-        args.camera = prompt_bool("Launch camera nodes", default=True)
-        logger.info(f"Using camera_enabled: {args.camera}")
+    logger.info(f"Using camera_enabled: {args.camera}")
+    logger.info(f"Using gripper_enabled: {args.gripper}")
 
     left_arm_text = "arm" if args.mode == "single" else "left arm"
 
@@ -180,6 +200,7 @@ def resolve_runtime_arguments(args: argparse.Namespace, logger: logging.Logger) 
             robot_ip=args.left_ip,
             namespace=args.left_namespace,
             launch_camera=bool(args.camera) and args.camera_arm == "left",
+            launch_gripper=bool(args.gripper),
         )
     ]
 
@@ -190,6 +211,7 @@ def resolve_runtime_arguments(args: argparse.Namespace, logger: logging.Logger) 
                 robot_ip=args.right_ip,
                 namespace=args.right_namespace,
                 launch_camera=bool(args.camera) and args.camera_arm == "right",
+                launch_gripper=bool(args.gripper),
             )
         )
 
@@ -220,6 +242,8 @@ def main() -> int:
 
     clients: dict[str, FrankaLockUnlock] = {}
     started_launches = False
+    started_third_person_camera = False
+    started_wrist_camera = False
 
     try:
         for arm in arms:
@@ -231,6 +255,12 @@ def main() -> int:
         wait_for_operator_ready()
         start_launches(arms, pixi_env, WORKSPACE_ROOT, logger, mode)
         started_launches = True
+
+        if camera_enabled:
+            start_third_person_camera_launch(pixi_env, WORKSPACE_ROOT, logger)
+            started_third_person_camera = True
+            start_wrist_camera_launch(pixi_env, WORKSPACE_ROOT, logger)
+            started_wrist_camera = True
  
 
         old_terminal_settings = termios.tcgetattr(sys.stdin.fileno())
@@ -273,6 +303,10 @@ def main() -> int:
         logger.exception(f"An error occurred while launching: {e}")
         return 1
     finally:
+        if started_wrist_camera:
+            stop_wrist_camera_process(pixi_env)
+        if started_third_person_camera:
+            stop_third_person_camera_process(pixi_env)
         if started_launches:
             stop_processes(arms, pixi_env)
         # Keep references alive until shutdown so Desk cleanup can relock on exit.

@@ -21,7 +21,7 @@ class ButtonToRecordMessage(Node):
             10,
         )
 
-        self.publisher = self.create_publisher(String, "record_transition", 10)
+        self.publisher = self.create_publisher(String, "/record_transition", 10)
         self.right_publisher = self.create_publisher(Bool, "franka_buttons/right", 10)
         self.gripper_pub = self.create_publisher(JointState, "trigger/trigger_state_broadcaster/joint_states", 10)
         self.create_timer(1.0 / 50.0, callback=self.publish_gripper_state)

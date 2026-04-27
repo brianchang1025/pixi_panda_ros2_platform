@@ -344,11 +344,11 @@ def generate_robot_nodes(context):
                 # Enable RGB stream.
                 'enable_color': True,
                 # Enable depth stream.
-                'enable_depth': True,
+                'enable_depth': False,
                 # Align depth image to color frame.
-                'align_depth.enable': True,
+                'align_depth.enable': False,
                 # Enable point cloud output from depth stream.
-                'pointcloud.enable': True,
+                'pointcloud.enable': False,
             }],
             output='screen',
             condition=IfCondition(LaunchConfiguration("load_camera")),
@@ -366,11 +366,11 @@ def generate_robot_nodes(context):
                 # Enable RGB stream.
                 'enable_color': True,
                 # Enable depth stream.
-                'enable_depth': True,
+                'enable_depth': False,
                 # Align depth image to color frame.
-                'align_depth.enable': True,
+                'align_depth.enable': False,
                 # Enable point cloud output from depth stream.
-                'pointcloud.enable': True,
+                'pointcloud.enable': False,
             }],
             output='screen',
             condition=IfCondition(LaunchConfiguration("load_camera")),

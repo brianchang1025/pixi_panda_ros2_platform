@@ -332,49 +332,49 @@ def generate_robot_nodes(context):
             condition=IfCondition(LaunchConfiguration("use_rviz")),
         ),
         # Third-person RealSense camera node.
-        Node(
-            package='realsense2_camera',
-            executable='realsense2_camera_node',
-            name='third_person_camera',
-            namespace='camera',
-            parameters=[{
-                # Camera serial number (typically from environment-backed launch arg).
-                'serial_no': LaunchConfiguration("third_person_camera_sn").perform(context),
-                'camera_name': 'third_person_camera',
-                # Enable RGB stream.
-                'enable_color': True,
-                # Enable depth stream.
-                'enable_depth': True,
-                # Align depth image to color frame.
-                'align_depth.enable': True,
-                # Enable point cloud output from depth stream.
-                'pointcloud.enable': True,
-            }],
-            output='screen',
-            condition=IfCondition(LaunchConfiguration("load_camera")),
-        ),
+        # Node(
+        #     package='realsense2_camera',
+        #     executable='realsense2_camera_node',
+        #     name='third_person_camera',
+        #     namespace='camera',
+        #     parameters=[{
+        #         # Camera serial number (typically from environment-backed launch arg).
+        #         'serial_no': LaunchConfiguration("third_person_camera_sn").perform(context),
+        #         'camera_name': 'third_person_camera',
+        #         # Enable RGB stream.
+        #         'enable_color': True,
+        #         # Enable depth stream.
+        #         'enable_depth': False,
+        #         # Align depth image to color frame.
+        #         'align_depth.enable': False,
+        #         # Enable point cloud output from depth stream.
+        #         'pointcloud.enable': False,
+        #     }],
+        #     output='screen',
+        #     condition=IfCondition(LaunchConfiguration("load_camera")),
+        # ),
         # Wrist camera (eye-in-hand) RealSense node.
-        Node(
-            package='realsense2_camera',
-            executable='realsense2_camera_node',
-            name='wrist_camera',
-            namespace='camera',
-            parameters=[{
-                # Camera serial number (typically from environment-backed launch arg).
-                'serial_no': LaunchConfiguration("wrist_camera_sn").perform(context),
-                'camera_name': 'wrist_camera',
-                # Enable RGB stream.
-                'enable_color': True,
-                # Enable depth stream.
-                'enable_depth': True,
-                # Align depth image to color frame.
-                'align_depth.enable': True,
-                # Enable point cloud output from depth stream.
-                'pointcloud.enable': True,
-            }],
-            output='screen',
-            condition=IfCondition(LaunchConfiguration("load_camera")),
-        ),
+        # Node(
+        #     package='realsense2_camera',
+        #     executable='realsense2_camera_node',
+        #     name='wrist_camera',
+        #     namespace='camera',
+        #     parameters=[{
+        #         # Camera serial number (typically from environment-backed launch arg).
+        #         'serial_no': LaunchConfiguration("wrist_camera_sn").perform(context),
+        #         'camera_name': 'wrist_camera',
+        #         # Enable RGB stream.
+        #         'enable_color': True,
+        #         # Enable depth stream.
+        #         'enable_depth': False,
+        #         # Align depth image to color frame.
+        #         'align_depth.enable': False,
+        #         # Enable point cloud output from depth stream.
+        #         'pointcloud.enable': False,
+        #     }],
+        #     output='screen',
+        #     condition=IfCondition(LaunchConfiguration("load_camera")),
+        # ),
     ]
 
     # Return all launch entities to the caller (OpaqueFunction).
