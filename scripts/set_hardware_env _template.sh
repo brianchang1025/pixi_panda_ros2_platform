@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+export THIRD_PERSON_CAMERA_SN=""
+export WRIST_CAMERA_SN=""
+export FRANKA_IP_LEFT=""
+export FRANKA_IP_RIGHT=""
+export FRANKA_DESK_USERNAME=""
+export FRANKA_DESK_PASSWORD=""
+# export FRANKA_DESK_USERNAME_LEFT=""
+# export FRANKA_DESK_PASSWORD_LEFT=""
+# export FRANKA_DESK_USERNAME_RIGHT=""
+# export FRANKA_DESK_PASSWORD_RIGHT=""

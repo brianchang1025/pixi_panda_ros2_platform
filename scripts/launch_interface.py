@@ -158,14 +158,14 @@ def resolve_runtime_arguments(args: argparse.Namespace, logger: logging.Logger) 
     if args.left_ip is None:
         args.left_ip = prompt_utils.prompt(
             message=f"Please enter IP address for {left_arm_text}",
-            default=os.getenv("LEFT_ROBOT_IP", os.getenv("ROBOT1_IP", "192.168.31.10")),
+            default=os.getenv("FRANKA_IP_LEFT", os.getenv("ROBOT1_IP", "192.168.31.10")),
         )
         logger.info(f"Using {left_arm_text} IP: {args.left_ip}")
 
     if args.left_namespace is None:
         args.left_namespace = prompt_utils.prompt(
             message=f"Please enter namespace for {left_arm_text}",
-            default=os.getenv("LEFT_ROBOT_NS", os.getenv("ROBOT1_NS", "left")),
+            default=os.getenv("FRANKA_NAMESPACE_LEFT", os.getenv("ROBOT1_NS", "left")),
         )
         logger.info(f"Using {left_arm_text} namespace: {args.left_namespace}")
 
@@ -173,14 +173,14 @@ def resolve_runtime_arguments(args: argparse.Namespace, logger: logging.Logger) 
         if args.right_ip is None:
             args.right_ip = prompt_utils.prompt(
                 message="Please enter IP address for right arm",
-                default=os.getenv("RIGHT_ROBOT_IP", os.getenv("ROBOT2_IP", "192.168.32.10")),
+                default=os.getenv("FRANKA_IP_RIGHT", os.getenv("ROBOT2_IP", "192.168.32.10")),
             )
             logger.info(f"Using right arm IP: {args.right_ip}")
 
         if args.right_namespace is None:
             args.right_namespace = prompt_utils.prompt(
                 message="Please enter namespace for right arm",
-                default=os.getenv("RIGHT_ROBOT_NS", os.getenv("ROBOT2_NS", "right")),
+                default=os.getenv("FRANKA_NAMESPACE_RIGHT", os.getenv("ROBOT2_NS", "right")),
             )
             logger.info(f"Using right namespace: {args.right_namespace}")
 
