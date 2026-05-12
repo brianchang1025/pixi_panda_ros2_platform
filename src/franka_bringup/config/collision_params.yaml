@@ -1,0 +1,12 @@
+/**:
+  ros__parameters:
+    collision_behavior:
+      lower_torque_thresholds_acceleration : [20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0]
+      upper_torque_thresholds_acceleration : [85.0, 85.0, 85.0, 85.0, 11.0, 11.0, 11.0]
+      lower_torque_thresholds_nominal : [10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]
+      upper_torque_thresholds_nominal : [85.0, 85.0, 85.0, 85.0, 11.0, 11.0, 11.0]
+      lower_force_thresholds_acceleration : [20.0, 20.0, 20.0, 20.0, 20.0, 20.0]
+      upper_force_thresholds_acceleration : [85.0, 85.0, 85.0, 85.0, 11.0, 11.0]
+      lower_force_thresholds_nominal : [10.0, 10.0, 10.0, 10.0, 10.0, 10.0]
+      upper_force_thresholds_nominal : [85.0, 85.0, 85.0, 85.0, 11.0, 11.0]
+

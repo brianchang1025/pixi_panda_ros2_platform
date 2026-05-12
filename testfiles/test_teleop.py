@@ -18,7 +18,7 @@ Usage: run this with the project's runtime environment, for example:
 
 import time
 import numpy as np 
-from crisp_py.robot import make_robot
+from crisp_py.robot import make_robot, RobotReflexException
 from crisp_py.gripper.gripper import make_gripper
 
 # %%
@@ -65,11 +65,11 @@ left_arm.controller_switcher_client.switch_controller("joint_impedance_controlle
 # SYNCHRONIZATION FUNCTION: Define crisp_py command execution for teleop
 # arm.set_target_joint() - sends joint position commands to the arm
 # arm.joint_values - reads current joint positions from arm state
-# gripper.set_gripper_state() - commands gripper position
-# gripper.closing_state() - reads gripper state (open/closed/intermediate)
+# gripper.set_target_status() - commands gripper status
+# gripper.current_status - reads gripper status (open/closed/)
 def sync(left_arm, right_arm, left_gripper, right_gripper):
     left_arm.set_target_joint(right_arm.joint_values)
-    left_gripper.set_gripper_state(right_gripper.closing_state())
+    left_gripper.set_target_status(right_gripper.current_status)
 
 # TIMER SETUP: Use crisp_py ROS node callbacks for real-time synchronization
 # node.create_timer(period_sec, callback) - creates a periodic timer at ~100 Hz
@@ -89,7 +89,12 @@ try:
         print(f"Right arm joint values (deg): {np.rad2deg(right_arm.joint_values)}")
         print(f"Right gripper value: {right_gripper.value}")
         print("-" * 40)
+        
+        left_arm.robot_mode_monitor()
+        right_arm.robot_mode_monitor()
         time.sleep(1.0)
+except RuntimeError as e:
+    print(f"Robot reflex triggered: {e}")
 except KeyboardInterrupt:
     print("User exits teleop...")
 finally:

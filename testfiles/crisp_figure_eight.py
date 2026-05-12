@@ -7,7 +7,7 @@ import numpy as np
 from crisp_py.robot import make_robot
 
 # %%
-robot = make_robot("panda")
+robot = make_robot("panda_left")
 
 robot.wait_until_ready()
 

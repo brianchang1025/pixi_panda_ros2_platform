@@ -10,6 +10,7 @@ install(
 
 install(
   PROGRAMS scripts/crisp_py_gripper_adapter.py
+  PROGRAMS scripts/robot_mode_broadcaster.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
