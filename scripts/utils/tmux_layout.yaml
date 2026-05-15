@@ -1,0 +1,22 @@
+session_name: panda_platform
+windows:
+  - window_name: dual_layout
+    layout: tiled
+    options:
+      pane-border-status: top
+      pane-border-format: " [Pane #P: #T] " # Shows index and the title you set
+      allow-rename: off
+    panes:
+      - shell_command: 
+          - tmux select-pane -T "LEFT_PANDA_ARM" # Force the title at the tmux level
+          - pixi shell -e jazzy-realsense
+        focus: true
+      - shell_command: 
+          - tmux select-pane -T "RIGHT_PANDA_ARM" # Force the title at the tmux level
+          - pixi shell -e jazzy-realsense
+      - shell_command: 
+          - tmux select-pane -T "WRIST_CAM" # Force the title at the tmux level
+          - pixi shell -e jazzy-realsense
+      - shell_command: 
+          - tmux select-pane -T "3RD_PERSON_CAM" # Force the title at the tmux level
+          - pixi shell -e jazzy-realsense

@@ -21,6 +21,7 @@ numpy = "<=2.3"
 opencv = "*"
 pandas = ">=2.3.0,<3"
 pyarrow = ">=20.0.0,<21"
+tmuxp = ">=1.68.0,<2"
 
 [target.linux.dependencies]
 libgl-devel = "*"

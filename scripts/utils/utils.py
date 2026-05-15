@@ -5,6 +5,7 @@ import os
 import select
 import sys
 import time
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, TYPE_CHECKING
@@ -30,13 +31,12 @@ class ArmConfig:
     label: str
     robot_ip: str
     namespace: str
-    launch_camera: bool
     launch_gripper: bool
 
 
 def wait_for_operator_ready() -> None:
     LOGGER.warning("IMPORTANT SAFETY CHECK before launching robot terminals:")
-    LOGGER.warning("- USER STOP MUST be open.")
+    LOGGER.warning("- EMERGENCY STOP MUST be open.")
     LOGGER.warning("- Robot status light MUST be blue.")
     LOGGER.warning("Press Enter only after both conditions are confirmed.")
     input()
@@ -77,38 +77,6 @@ def enable_arm_with_desk(
     return client
 
 
-def reboot_and_relaunch_side(
-    side: str,
-    arms: List["ArmConfig"],
-    clients: dict[str, "FrankaLockUnlock"],
-    pixi_env: str,
-    logger: logging.Logger,
-    mode: str = "dual",
-) -> None:
-    from utils.terminal_launcher import stop_single_process, start_single_launch
-
-    arm = next((candidate for candidate in arms if candidate.label == side), None)
-    if arm is None:
-        logger.warning(f"No {side} arm is configured; cannot reboot the {side} arm.")
-        return
-
-    client = clients.get(side)
-    if client is None:
-        logger.warning(f"{side.capitalize()} Franka Desk client is missing; cannot reboot the {side} arm.")
-        return
-
-    logger.info(f"Received '{side[0]}': rebooting the {side} arm via Franka Desk...")
-    client.reboot_sys()
-
-    logger.info(f"Stopping the {side} launch process...")
-    stop_single_process(arm, pixi_env)
-    time.sleep(1)
-
-    logger.info(f"Confirm safety before relaunching the {side} arm.")
-    wait_for_operator_ready()
-
-    logger.info(f"Reopening the {side} launch terminal...")
-    start_single_launch(arm, pixi_env, WORKSPACE_ROOT, logger, mode)
 
 
 def read_key() -> str:
@@ -136,3 +104,63 @@ def show_keyboard_controls_panel(mode: str = "dual") -> None:
         content = Text(panel_text)
         rich_print(Panel(content, title="Control Panel", border_style="blue"))
         return
+
+def build_panda_launch_command(arm: "ArmConfig", pixi_env: str) -> List[str]:
+    """Build ROS 2 launch command for a single arm.
+    
+    Args:
+        arm: Arm configuration with IP, namespace, and camera settings
+        pixi_env: Pixi environment name (e.g., 'jazzy-realsense')
+        
+    Returns:
+        Command as list of strings suitable for subprocess/shlex.join()
+    """
+    # Quote namespace if empty to avoid "namespace:=" which is invalid syntax
+    cmd = [
+        "pixi",
+        "run",
+        "-e",
+        pixi_env,
+        "franka_platform",
+        f"robot_ip:={arm.robot_ip}",
+        f"namespace:={arm.namespace}",
+        f"load_gripper:={'true' if arm.launch_gripper else 'false'}",
+    ]
+    return " ".join(cmd)
+
+def build_3rd_camera_launch_command(pixi_env: str) -> List[str]:
+    """Build ROS 2 launch command for third-person camera in its own terminal."""
+    cmd = [
+        "pixi",
+        "run",
+        "-e",
+        pixi_env,
+        "third_person_realsense",
+    ]
+    return " ".join(cmd)
+
+def build_wrist_camera_launch_command(pixi_env: str) -> List[str]:
+    """Build ROS 2 launch command for wrist camera in its own terminal."""
+    cmd = [
+        "pixi",
+        "run",
+        "-e",
+        pixi_env,
+        "wrist_realsense",
+    ]
+    return " ".join(cmd)
+
+def launch_rqt_background():
+    """
+    Launches rqt in the background, redirecting output and errors to /dev/null
+    to keep the terminal clean.
+    """
+    # We use a single string with shell=True to easily handle the redirects
+    cmd = "rqt > /dev/null 2>&1 &"
+    
+    try:
+        # Popen starts the process and moves on immediately
+        subprocess.Popen(cmd, shell=True, preexec_fn=os.setpgrp)
+        LOGGER.info("🚀 rqt launched in background (logs silenced).")
+    except Exception as e:
+        LOGGER.error(f"❌ Failed to launch rqt: {e}")

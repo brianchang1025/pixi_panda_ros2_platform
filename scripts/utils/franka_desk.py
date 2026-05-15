@@ -264,6 +264,9 @@ class FrankaLockUnlock(FrankaClient):
         self.unable_robot()
         sleep(3)
         self.enable_robot()
+        
+
+
     
 
 # ---------------------------------------------------------------------------
