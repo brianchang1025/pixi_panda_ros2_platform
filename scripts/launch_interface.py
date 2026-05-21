@@ -7,19 +7,22 @@ import os
 import sys
 import termios
 import tty
+import select
+import rclpy
+import threading
+from rclpy.executors import MultiThreadedExecutor
 from typing import List
-
+from rich.live import Live
 from utils.tmux_manager import TmuxManager
 from utils.franka_desk import FrankaLockUnlock
-from utils import prompt as prompt_utils
+from utils.platformdashboard import RobotDashboard
 from utils.setup_logger import setup_logging, log_arguments, log_runtime_status
+from utils.setup_panel import configuration_panel, safety_check_panel, control_panel, prompt
 from utils.utils import (
     ArmConfig,
-    wait_for_operator_ready,
     get_desk_credentials,
     enable_arm_with_desk,
     read_key,
-    show_keyboard_controls_panel,
     WORKSPACE_ROOT,
     build_panda_launch_command,
     build_3rd_camera_launch_command,
@@ -116,27 +119,24 @@ def build_parser() -> argparse.ArgumentParser:
 
 def resolve_runtime_arguments(args: argparse.Namespace, logger: logging.Logger) -> tuple[str, bool, List[ArmConfig]]:
     if args.mode is None:
-        args.mode = prompt_utils.prompt(
+        args.mode = prompt(
             message="Select teleoperation mode",
             options=["single", "dual"],
             default="single",
         )
         logger.info(f"Using teleoperation mode: {args.mode}")
 
-    logger.info(f"Using camera_enabled: {args.camera}")
-    logger.info(f"Using gripper_enabled: {args.gripper}")
-
     left_arm_text = "arm" if args.mode == "single" else "left arm"
 
     if args.left_ip is None:
-        args.left_ip = prompt_utils.prompt(
+        args.left_ip = prompt(
             message=f"Please enter IP address for {left_arm_text}",
             default=os.getenv("FRANKA_IP_LEFT", "192.168.31.10"),
         )
         logger.info(f"Using {left_arm_text} IP: {args.left_ip}")
 
     if args.left_namespace is None:
-        args.left_namespace = prompt_utils.prompt(
+        args.left_namespace = prompt(
             message=f"Please enter namespace for {left_arm_text}",
             default=os.getenv("FRANKA_NAMESPACE_LEFT", "left"),
         )
@@ -144,14 +144,14 @@ def resolve_runtime_arguments(args: argparse.Namespace, logger: logging.Logger) 
 
     if args.mode == "dual":
         if args.right_ip is None:
-            args.right_ip = prompt_utils.prompt(
+            args.right_ip = prompt(
                 message="Please enter IP address for right arm",
                 default=os.getenv("FRANKA_IP_RIGHT", "192.168.32.10"),
             )
             logger.info(f"Using right arm IP: {args.right_ip}")
 
         if args.right_namespace is None:
-            args.right_namespace = prompt_utils.prompt(
+            args.right_namespace = prompt(
                 message="Please enter namespace for right arm",
                 default=os.getenv("FRANKA_NAMESPACE_RIGHT", "right"),
             )
@@ -184,10 +184,13 @@ def resolve_runtime_arguments(args: argparse.Namespace, logger: logging.Logger) 
 
 
 def main() -> int:
+    rclpy.init()
+    
     parser = build_parser()
     args = parser.parse_args()
+    configuration_panel(args)
     setup_logging(level=getattr(logging, args.log_level.upper()))
-    log_arguments(args, LOGGER)
+    #log_arguments(args, LOGGER)
 
     mode, camera_enabled, arms = resolve_runtime_arguments(args, LOGGER)
 
@@ -197,70 +200,96 @@ def main() -> int:
     clients: dict[str, FrankaLockUnlock] = {}
     tmux_manager = TmuxManager(cwd=WORKSPACE_ROOT)
     tmux_manager.launch_tmux()
+    
+    robot_dashboard = RobotDashboard(use_camera=camera_enabled, arms=arms)
+    executor = MultiThreadedExecutor()
+    executor.add_node(robot_dashboard)
+    dashboard_thread = threading.Thread(target=executor.spin, daemon=True)
+    dashboard_thread.start()
 
     try:
+        
+        
         for arm in arms:
             username, password = get_desk_credentials(arm.label) #map the arm label to the appropriate credentials
             arm_display = "" if mode == "single" else arm.label
             LOGGER.info(f"Preparing {arm_display} arm with ip={arm.robot_ip}, namespace={arm.namespace}")
             clients[arm.label] = enable_arm_with_desk(arm, username, password, protocol)
-        wait_for_operator_ready()
+        safety_check_panel()
         
         if mode == "single":
             left_panda_command = build_panda_launch_command(arms[0], pixi_env)
             tmux_manager.send_command_to_pane(0, left_panda_command)
+            time.sleep(5)  # Stagger launches to avoid overloading the system at startup
         else:
             left_panda_command = build_panda_launch_command(arms[0], pixi_env)
             tmux_manager.send_command_to_pane(0, left_panda_command)
+            time.sleep(5)  # Stagger launches to avoid overloading the system at startup
             right_panda_command = build_panda_launch_command(arms[1], pixi_env)
             tmux_manager.send_command_to_pane(1, right_panda_command)
+            time.sleep(5)  # Stagger launches to avoid overloading the system at startup
 
         if camera_enabled:
             third_camera_command = build_3rd_camera_launch_command(pixi_env)
             tmux_manager.send_command_to_pane(2, third_camera_command)
+            time.sleep(5)  # Stagger launches to avoid overloading the system at startup
             wrist_camera_command = build_wrist_camera_launch_command(pixi_env)
             tmux_manager.send_command_to_pane(3, wrist_camera_command)
             
-        time.sleep(10)  # Wait a bit for the main launches to start before launching RQT
-        launch_rqt_background()
+        # time.sleep(10)  # Wait a bit for the main launches to start before launching RQT
+        # launch_rqt_background()
+        
+
+        # Generate the initial layout state
+        initial_layout = control_panel(args, hardware_status_list=robot_dashboard.get_status_list())
 
         old_terminal_settings = termios.tcgetattr(sys.stdin.fileno())
         tty.setcbreak(sys.stdin.fileno())
         try:
-            while True:
-                show_keyboard_controls_panel(mode)
-                key = read_key()
-                key = key.lower()
-                if key == "q":
-                    LOGGER.info("Received 'q': stopping the launch interface.")
-                    return 0
-                if key == "s":
-                    pass
-                    continue
-                if key == "h":
-                    show_keyboard_controls_panel(mode)
-                    continue
-                if key == "l":
-                    termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_terminal_settings)
-                    try:
-                        tmux_manager.send_interupt_to_pane(0)
-                        clients[arms[0].label].reboot_sys()
-                        wait_for_operator_ready()
-                        tmux_manager.send_command_to_pane(0, left_panda_command)
-                    finally:
-                        tty.setcbreak(sys.stdin.fileno())
-                    continue
-                if key == "r":
-                    if mode == "dual":
+            with Live(initial_layout, screen=False, refresh_per_second=1) as live:
+                while True:
+                    # live.update(control_panel(args, hardware_status_list=robot_dashboard.get_status_list()))
+                    
+                    rlist, _, _ = select.select([sys.stdin], [], [], 0.2)
+                    
+                    if rlist:
+                        # A key was actually pressed! Safe to read it now without blocking.
+                        key = read_key().lower()
+                    else:
+                        # No key was pressed. Skip the rest of the checks and let the loop spin.
+                        continue
+                    
+                    if key == "q":
+                        LOGGER.info("Received 'q': stopping the launch interface.")
+                        return 0
+                    if key == "v":
+                        launch_rqt_background()
+                        continue
+                    if key == "l":
+                        # live.stop()
                         termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_terminal_settings)
                         try:
-                            tmux_manager.send_interupt_to_pane(1)
-                            clients[arms[1].label].reboot_sys()
-                            wait_for_operator_ready()
-                            tmux_manager.send_command_to_pane(1, right_panda_command)
+                            tmux_manager.send_interupt_to_pane(0)
+                            clients[arms[0].label].reboot_sys()
+                            safety_check_panel()
+                            tmux_manager.send_command_to_pane(0, left_panda_command)
                         finally:
                             tty.setcbreak(sys.stdin.fileno())
-                    continue
+                            # live.start()
+                        continue
+                    if key == "r":
+                        if mode == "dual":
+                            # live.stop()
+                            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_terminal_settings)
+                            try:
+                                tmux_manager.send_interupt_to_pane(1)
+                                clients[arms[1].label].reboot_sys()
+                                safety_check_panel()
+                                tmux_manager.send_command_to_pane(1, right_panda_command)
+                            finally:
+                                tty.setcbreak(sys.stdin.fileno())
+                                # live.start()
+                        continue
         finally:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_terminal_settings)
     except KeyboardInterrupt:
@@ -270,6 +299,8 @@ def main() -> int:
         LOGGER.exception(f"An error occurred while launching: {e}")
         return 1
     finally:
+        robot_dashboard.destroy_node()
+        rclpy.shutdown()
         tmux_manager.kill_tmux_session()
         # Keep references alive until shutdown so Desk cleanup can relock on exit.
         _ = clients

@@ -94,18 +94,39 @@
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.actions import OpaqueFunction, Shutdown
+from launch.actions import OpaqueFunction, Shutdown, ExecuteProcess
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, EnvironmentVariable
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from typing import List
 import xacro
+import yaml
 
 # Build the runtime node list for the Franka platform launch.
 # This function resolves launch arguments, generates robot_description from xacro,
 # and returns all Nodes/Includes to start.
 
+
+def cvt_to_string(input_list: List) -> str:
+    """Convert a list of numbers to a comma-separated string."""
+    return ', '.join(map(str, map(float, input_list)))
+
+def get_collision_params(yaml_path):
+    """
+    Reads Franka collision parameters from a ROS 2 YAML file.
+    Returns a dictionary of parameters or None if failed.
+    """
+    try:
+        with open(yaml_path, 'r') as f:
+            data = yaml.safe_load(f)
+        # ROS 2 YAMLs typically use '/**' or the node name as the top key
+        # This safely navigates to the core dictionary
+        return data['/**']['ros__parameters']['collision_behavior']
+    except Exception as e:
+        print(f"Error loading collision YAML at {yaml_path}: {e}")
+        return None
 
 def generate_robot_nodes(context):
 
@@ -127,6 +148,8 @@ def generate_robot_nodes(context):
             LaunchConfiguration("urdf_file"),
         ]
     ).perform(context)
+    
+    
 
     # Generate the full robot description XML by processing the selected xacro file.
     # The mappings below inject runtime launch parameters into the xacro template.
@@ -155,6 +178,8 @@ def generate_robot_nodes(context):
 
     # Controller manager YAML path (can be overridden by launch argument).
     controllers_yaml = LaunchConfiguration("controllers_yaml").perform(context)
+    collision_params_yaml = LaunchConfiguration("collision_params_yaml").perform(context)
+    collisions_params = get_collision_params(collision_params_yaml)
 
     # Joint state sources merged by joint_state_publisher:
     # robot arm state + optional gripper state.
@@ -210,6 +235,13 @@ def generate_robot_nodes(context):
             output="screen",
         ),
         # Spawn always-on joint state broadcaster controller.
+        Node(
+            package="controller_manager",
+            executable="spawner",
+            namespace=namespace,
+            arguments=["franka_robot_state_broadcaster"],
+            output="screen",
+        ),
         Node(
             package="controller_manager",
             executable="spawner",
@@ -291,6 +323,13 @@ def generate_robot_nodes(context):
                 output="screen",
                 condition=IfCondition(LaunchConfiguration("load_gripper")),
         ),
+        Node(
+                package="franka_bringup",
+                executable="robot_mode_broadcaster.py",
+                name="robot_mode_broadcaster",
+                namespace=namespace,
+                output="screen",
+        ),
         # Franka Button node for reading robot button states.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -313,6 +352,35 @@ def generate_robot_nodes(context):
             condition=IfCondition(LaunchConfiguration("buttons_enabled")),
         ),
         
+        ExecuteProcess(
+            cmd=[[
+                "ros2 service call ",
+                f"/{namespace}/panda_param_service_server/set_full_collision_behavior ",
+                "franka_msgs/srv/SetFullCollisionBehavior ",
+                "\"{ ",
+                "lower_torque_thresholds_acceleration: ",
+                f"[{cvt_to_string(collisions_params['lower_torque_thresholds_acceleration'])}], ",
+                "upper_torque_thresholds_acceleration: ",
+                f"[{cvt_to_string(collisions_params['upper_torque_thresholds_acceleration'])}], ",
+                "lower_torque_thresholds_nominal: ",
+                f"[{cvt_to_string(collisions_params['lower_torque_thresholds_nominal'])}], ",
+                "upper_torque_thresholds_nominal: ",
+                f"[{cvt_to_string(collisions_params['upper_torque_thresholds_nominal'])}], ",
+                "lower_force_thresholds_acceleration: ",
+                f"[{cvt_to_string(collisions_params['lower_force_thresholds_acceleration'])}], ",
+                "upper_force_thresholds_acceleration: ",
+                f"[{cvt_to_string(collisions_params['upper_force_thresholds_acceleration'])}], ",
+                "lower_force_thresholds_nominal: ",
+                f"[{cvt_to_string(collisions_params['lower_force_thresholds_nominal'])}], ",
+                "upper_force_thresholds_nominal: ",
+                f"[{cvt_to_string(collisions_params['upper_force_thresholds_nominal'])}] ",
+                "}\"",
+            ]],
+            shell=True,
+            name='set_robot_collision_behavior',
+            output='screen',
+        ),
+        
         # Optional RViz visualization with Franka default display config.
         Node(
             package="rviz2",
@@ -332,49 +400,49 @@ def generate_robot_nodes(context):
             condition=IfCondition(LaunchConfiguration("use_rviz")),
         ),
         # Third-person RealSense camera node.
-        Node(
-            package='realsense2_camera',
-            executable='realsense2_camera_node',
-            name='third_person_camera',
-            namespace='camera',
-            parameters=[{
-                # Camera serial number (typically from environment-backed launch arg).
-                'serial_no': LaunchConfiguration("third_person_camera_sn").perform(context),
-                'camera_name': 'third_person_camera',
-                # Enable RGB stream.
-                'enable_color': True,
-                # Enable depth stream.
-                'enable_depth': False,
-                # Align depth image to color frame.
-                'align_depth.enable': False,
-                # Enable point cloud output from depth stream.
-                'pointcloud.enable': False,
-            }],
-            output='screen',
-            condition=IfCondition(LaunchConfiguration("load_camera")),
-        ),
+        # Node(
+        #     package='realsense2_camera',
+        #     executable='realsense2_camera_node',
+        #     name='third_person_camera',
+        #     namespace='camera',
+        #     parameters=[{
+        #         # Camera serial number (typically from environment-backed launch arg).
+        #         'serial_no': LaunchConfiguration("third_person_camera_sn").perform(context),
+        #         'camera_name': 'third_person_camera',
+        #         # Enable RGB stream.
+        #         'enable_color': True,
+        #         # Enable depth stream.
+        #         'enable_depth': False,
+        #         # Align depth image to color frame.
+        #         'align_depth.enable': False,
+        #         # Enable point cloud output from depth stream.
+        #         'pointcloud.enable': False,
+        #     }],
+        #     output='screen',
+        #     condition=IfCondition(LaunchConfiguration("load_camera")),
+        # ),
         # Wrist camera (eye-in-hand) RealSense node.
-        Node(
-            package='realsense2_camera',
-            executable='realsense2_camera_node',
-            name='wrist_camera',
-            namespace='camera',
-            parameters=[{
-                # Camera serial number (typically from environment-backed launch arg).
-                'serial_no': LaunchConfiguration("wrist_camera_sn").perform(context),
-                'camera_name': 'wrist_camera',
-                # Enable RGB stream.
-                'enable_color': True,
-                # Enable depth stream.
-                'enable_depth': False,
-                # Align depth image to color frame.
-                'align_depth.enable': False,
-                # Enable point cloud output from depth stream.
-                'pointcloud.enable': False,
-            }],
-            output='screen',
-            condition=IfCondition(LaunchConfiguration("load_camera")),
-        ),
+        # Node(
+        #     package='realsense2_camera',
+        #     executable='realsense2_camera_node',
+        #     name='wrist_camera',
+        #     namespace='camera',
+        #     parameters=[{
+        #         # Camera serial number (typically from environment-backed launch arg).
+        #         'serial_no': LaunchConfiguration("wrist_camera_sn").perform(context),
+        #         'camera_name': 'wrist_camera',
+        #         # Enable RGB stream.
+        #         'enable_color': True,
+        #         # Enable depth stream.
+        #         'enable_depth': False,
+        #         # Align depth image to color frame.
+        #         'align_depth.enable': False,
+        #         # Enable point cloud output from depth stream.
+        #         'pointcloud.enable': False,
+        #     }],
+        #     output='screen',
+        #     condition=IfCondition(LaunchConfiguration("load_camera")),
+        # ),
     ]
 
     # Return all launch entities to the caller (OpaqueFunction).
@@ -456,6 +524,14 @@ def generate_launch_description():
             ),
             description="Override the default controllers.yaml file.",
         ),
+        DeclareLaunchArgument(
+            "collision_params_yaml",
+            default_value=PathJoinSubstitution(
+                [FindPackageShare("franka_bringup"), "config", "collision_params.yaml"]
+            ),
+            description="Override the default collision_params.yaml file.",
+        )
+            
     ]
 
     return LaunchDescription(

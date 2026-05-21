@@ -13,18 +13,8 @@ from typing import List, TYPE_CHECKING
 if TYPE_CHECKING:
     from utils.franka_desk import FrankaLockUnlock
 
-try:
-    from rich import print as rich_print  # type: ignore[import-not-found]
-    from rich.panel import Panel  # type: ignore[import-not-found]
-    from rich.text import Text  # type: ignore[import-not-found]
-except ImportError:
-    rich_print = None
-    Panel = None
-    Text = None
-
 LOGGER = logging.getLogger(__name__)
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
-
 
 @dataclass(frozen=True)
 class ArmConfig:
@@ -83,27 +73,6 @@ def read_key() -> str:
     select.select([sys.stdin], [], [])
     return sys.stdin.read(1)
 
-
-def show_keyboard_controls_panel(mode: str = "dual") -> None:
-    if rich_print is not None and Panel is not None and Text is not None:
-        if mode == "single":
-            panel_text = (
-                "[q] Quit launcher\n"
-                "[s] Show runtime status\n"
-                "[h] Show this help\n"
-                "[l] Reboot and relaunch arm"
-            )
-        else:
-            panel_text = (
-                "[q] Quit launcher\n"
-                "[s] Show runtime status\n"
-                "[h] Show this help\n"
-                "[l] Reboot and relaunch left arm\n"
-                "[r] Reboot and relaunch right arm"
-            )
-        content = Text(panel_text)
-        rich_print(Panel(content, title="Control Panel", border_style="blue"))
-        return
 
 def build_panda_launch_command(arm: "ArmConfig", pixi_env: str) -> List[str]:
     """Build ROS 2 launch command for a single arm.

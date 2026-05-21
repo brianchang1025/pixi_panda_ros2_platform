@@ -34,6 +34,8 @@ def generate_launch_description():
                 'camera_name': 'wrist_camera',
                 'enable_color': True,
                 'enable_depth': False,
+                'enable_infra1': False,
+                'enable_infra2': False,
                 'align_depth.enable': False,
                 'pointcloud.enable': False,
             }],
